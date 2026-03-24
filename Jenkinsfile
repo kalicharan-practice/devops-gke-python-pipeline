@@ -1,5 +1,11 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            // Google Cloud SDK image with kubectl pre-installed
+            image 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
+            args '-u root:root'
+        }
+    }
 
     environment {
         // Docker image info
@@ -51,21 +57,18 @@ pipeline {
         stage('Deploy to GKE') {
             steps {
                 sh '''
-                # Authenticate to GCP using Workload Identity
-                gcloud auth login --impersonate-service-account=$GCP_SERVICE_ACCOUNT
-
-                # Get GKE cluster credentials
+                # Authenticate using node's Workload Identity
                 gcloud container clusters get-credentials $GKE_CLUSTER --zone $GKE_ZONE
 
-                # Update deployment.yaml with the new image tag
-                sed -i "s|image: $DOCKER_IMAGE:.*|image: $DOCKER_IMAGE:$IMAGE_TAG|" deployment.yaml
+                # Update deployment.yaml image tag in k8s folder
+                sed -i "s|image: $DOCKER_IMAGE:.*|image: $DOCKER_IMAGE:$IMAGE_TAG|" k8s/deployment.yaml
 
-                # Deploy to GKE
-                kubectl apply -f deployment.yaml --namespace=$GKE_NAMESPACE
-                kubectl apply -f service.yaml --namespace=$GKE_NAMESPACE
+                # Deploy all resources in k8s folder
+                kubectl apply -f k8s/ --namespace=$GKE_NAMESPACE
                 '''
             }
         }
+
     }
 
     post {

@@ -23,7 +23,7 @@ pipeline {
             }
         }
 
-        stage('Docker Login') {
+        stage('Build and Push Docker Image') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub',
@@ -31,26 +31,20 @@ pipeline {
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
                     sh '''
+                    # Docker login inside the same credentials context
                     echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+
+                    # Build Docker image with both latest and versioned tags
+                    docker build -t $DOCKER_IMAGE:latest -t $DOCKER_IMAGE:$IMAGE_TAG .
+
+                    # Push images
+                    docker push $DOCKER_IMAGE:$IMAGE_TAG
+                    docker push $DOCKER_IMAGE:latest
+
+                    # Logout to clean credentials
+                    docker logout
                     '''
                 }
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                sh '''
-                docker build -t $DOCKER_IMAGE:latest -t $DOCKER_IMAGE:$IMAGE_TAG .
-                '''
-            }
-        }
-
-        stage('Push Docker Image') {
-            steps {
-                sh '''
-                docker push $DOCKER_IMAGE:latest
-                docker push $DOCKER_IMAGE:$IMAGE_TAG
-                '''
             }
         }
 
@@ -76,10 +70,10 @@ pipeline {
 
     post {
         always {
-            sh 'docker logout'
+            echo "Pipeline finished. Clean up complete."
         }
         success {
-            echo "Docker images $DOCKER_IMAGE:latest and $DOCKER_IMAGE:$IMAGE_TAG pushed and deployed successfully!"
+            echo "Docker images pushed and deployed successfully: $DOCKER_IMAGE:$IMAGE_TAG"
         }
         failure {
             echo "Pipeline failed. Check logs for details."
